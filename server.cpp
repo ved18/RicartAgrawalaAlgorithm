@@ -4,6 +4,7 @@
 #include"connection.cpp"
 #include"fileIO.cpp"
 
+
 using namespace std;
 
 #define MAX 256
@@ -19,7 +20,6 @@ using namespace std;
 #define F3 "TestFile3"
 #define REPLICATE "Replicate"
 
-
 //Global variables
 static int serverFd[2] = {-1};
 static bool crExec[3] = {false};
@@ -28,6 +28,7 @@ static queue<pair<int, string>> deferredQueue;
 static char* sNo = new char[MAX];
 static int portNo;
 static map<int, bool> hasRequested;
+static atomic<int> lampClock=0;
 
 void init()
 {
@@ -36,6 +37,12 @@ void init()
         crExec[i] = false;
         serverFd[i] = -1;
     }
+}
+
+void incClock(int compTime)
+{
+    int temp = lampClock;
+    lampClock = max(temp, compTime) + 1;
 }
 
 int getFileNo(char fileName[])
@@ -55,7 +62,7 @@ void sendFileList(int clientSocket)
         char *response = new char[MAX];
         temp = "TestFile";
         temp += to_string(i);
-        cout<<temp<<endl;
+        //cout<<temp<<endl;
         memcpy(response, temp.data(), temp.length());
         send(clientSocket, response, MAX, 0);
         temp = "";
@@ -140,7 +147,6 @@ void writeFile(int clientSocket, char fileName[MAX], char timeStamp[MAX], char c
     
 
     //did we receive both the replies??
-    cout<<"\nWaiting for reply for "<<serverFd[0]<<" "<<fileNo<<endl;
     cout<<"Debug Clientid: "<<clientId<<endl;
     while(true)
     {
@@ -182,8 +188,7 @@ void sockListen(int serverSocket)
         cout<<"\nListen failed";
         exit(0);
     }
-    else
-        cout<<"\nListening on socket for client...."<<endl;
+       
     
     //accepting requests from another client
     clientSocket = accept(serverSocket, (SA *)&cliaddr, &len);
@@ -205,12 +210,12 @@ void sockListen(int serverSocket)
         if(read(clientSocket, request, MAX) == -1)
         {
             cout<<"\nError in reading from client"<<endl;
-            close(clientSocket);   
+            close(clientSocket);
             exit(0);
         }
         else if(!strcmp(request, DONE))
         {
-            close(clientSocket);   
+            close(clientSocket);
             exit(0);
         }
         else if(!strcmp(request, ENQUIRY))      //Enquiry about files
@@ -224,6 +229,9 @@ void sockListen(int serverSocket)
             char fileName[MAX];
             char timeStamp[MAX];
             char clientId[MAX];
+            
+            incClock(lampClock);
+            
             if(read(clientSocket, fileName, MAX) != -1)
             {
                 if(read(clientSocket, timeStamp, MAX) != -1)
@@ -257,7 +265,11 @@ void sockListenServer(int tempFd)
 
         if(read(tempFd, request, MAX) != -1)
         {   
-            cout<<request<<endl;
+            char compTime[MAX];
+            // if(read(tempFd, compTime, MAX) != -1)
+            //     incClock(stoi(compTime));
+
+            cout<<"\nRequest type: "<<request<<endl;
             if(!strcmp(request, REPLICATE))
             {
                 // replicate to file.
@@ -343,6 +355,10 @@ int main(int argc, char** argv)
     struct sockaddr_in servaddr1, servaddr2;
     //creating a socket
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    //clientThreads
+    thread clientThread[5];
+
     if (serverSocket == -1)
     {
         cout<<"\nCouldnt create socket";
@@ -444,10 +460,13 @@ int main(int argc, char** argv)
     
     thread serverThread1(sockListenServer, serverFd[0]);
     thread serverThread2(sockListenServer, serverFd[1]);
-    thread clientThread(sockListen, serverSocket);
-    clientThread.join();
-    //closing the socket connection
-    close(serverSocket);
+    cout<<"\nListening on socket for client...."<<endl;
+    for(int i=0; i<5; i++)
+        clientThread[i] = thread(sockListen, serverSocket);
+    
+    for(int i=0; i<5; i++)
+        clientThread[i].join();
 
-    return 0;
+    exit(0);
+    //closing the socket connection
 }
