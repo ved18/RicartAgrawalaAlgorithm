@@ -28,7 +28,7 @@ static queue<pair<int, string>> deferredQueue;
 static char* sNo = new char[MAX];
 static int portNo;
 static map<int, bool> hasRequested;
-static atomic<int> lampClock=0;
+static atomic<int> lampClock(0);
 
 void init()
 {
