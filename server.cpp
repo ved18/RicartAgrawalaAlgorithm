@@ -79,7 +79,7 @@ void sendDefReplies()
     {
         pair<int, pair<int, string>> p =  deferredQueue.top();
         
-        cout<<"\nQ front: "<<p.first<<endl;
+        // cout<<"\nQ front: "<<p.first<<endl;
 
         int tempFd = p.second.first;
         string temp = p.second.second;
@@ -291,7 +291,7 @@ void sockListenServer(int tempFd)
                     {
                         if(read(tempFd, clientId, MAX) != -1)
                         {
-                            cout<<fileName<<" "<<timeStamp<<" "<<clientId<<endl;
+                            // cout<<fileName<<" "<<timeStamp<<" "<<clientId<<endl;
                             appendFile(fileName, timeStamp, clientId, sNo);
 
                         };
