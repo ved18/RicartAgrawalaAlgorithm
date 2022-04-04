@@ -10,7 +10,7 @@ using namespace std;
 #define DONE "Done"
 
 char clientId[MAX];
-
+vector<string> ips = {"10.176.69.32", "10.176.69.33", "10.176.69.34"};
 void writeHelper(int clientSocket)
 {
 	char* filename = new char[MAX];
@@ -107,8 +107,13 @@ int main(int argc, char** argv)
 	
 	memcpy(clientId, argv[1], sizeof(argv));
 	
+	int temp = rand()%3;
+	char* ip = new char[MAX];
+	memcpy(ip, ips[temp].data(), ips[temp].length());
+
 	connServer(clientSocket, argv[3], stoi(argv[2]));
-	
+	delete ip;
+
 	thread clientThread(mainFunc, clientSocket);
 	clientThread.join();
 	

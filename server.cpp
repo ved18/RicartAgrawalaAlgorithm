@@ -24,7 +24,7 @@ using namespace std;
 static int serverFd[2] = {-1};
 static bool crExec[3] = {false};
 static map<pair<int,int>, bool> Reply;
-static queue<pair<int, string>> deferredQueue;
+static priority_queue<pair<int, pair<int, string>>, vector<pair<int,pair<int, string>>>, greater<pair<int,pair<int, string>>>> deferredQueue;
 static char* sNo = new char[MAX];
 static int portNo;
 static map<int, bool> hasRequested;
@@ -43,6 +43,7 @@ void incClock(int compTime)
 {
     int temp = lampClock;
     lampClock = max(temp, compTime) + 1;
+    cout<<"\nLamports clock value: "<<lampClock<<endl;
 }
 
 int getFileNo(char fileName[])
@@ -76,9 +77,12 @@ void sendDefReplies()
     int size = deferredQueue.size();
     for(int i=0; i<size; i++)
     {
-        pair<int, string> p =  deferredQueue.front();
-        int tempFd = p.first;
-        string temp = p.second;
+        pair<int, pair<int, string>> p =  deferredQueue.top();
+        
+        cout<<"\nQ front: "<<p.first<<endl;
+
+        int tempFd = p.second.first;
+        string temp = p.second.second;
 
         char* fileName = new char[MAX];
 
@@ -103,6 +107,10 @@ void sendRequest(int serverNo, char fileName[])
     cout<<serverFd[serverNo]<<" "<<fileNo<<endl;
     if(send(serverFd[serverNo], REQUEST, MAX, 0) != -1)
     {
+        incClock(lampClock);
+        int *temp = new int;
+        *temp = lampClock;
+        send(serverFd[serverNo], temp, sizeof(temp), 0);
         if(send(serverFd[serverNo], fileName, MAX, 0) != -1)
         {
             cout<<"\nRequest sent to server for entering critical section"<<endl;
@@ -245,7 +253,11 @@ void sockListen(int serverSocket)
                             cout<<"\nError in writing to file."<<endl;
                     }
                 }
-            }
+            }    
+        }
+        else
+        {
+            exit(0);
         }
         delete request;
     }
@@ -288,6 +300,9 @@ void sockListenServer(int tempFd)
             }
             else if(!strcmp(request, REQUEST))
             {
+                int* temp = new int;
+                read(tempFd, temp, sizeof(temp));
+                incClock(*temp);
                 //write request from another server. Need to reply it back.
                 if(read(tempFd, fileName, MAX) != -1)
                     cout<<"\nNeed to write to following file: "<<fileName<<endl;
@@ -298,16 +313,17 @@ void sockListenServer(int tempFd)
                 {
                     string temp = string(fileName);
                     cout<<"\nWrite request received from another server. Server already in a critical section for given file. Need to wait."<<endl;
-                    deferredQueue.push({tempFd, temp});
+                    deferredQueue.push({(int)lampClock, {tempFd, temp}});
                 }
                 else if(hasRequested[fileNo] == true)
                 {
                     string temp = string(fileName);
                     cout<<"\nWrite request received from another server. Current server also needs to enter critical section. Adding to queue based on timestamp."<<endl;
-                    deferredQueue.push({tempFd, temp});
+                    deferredQueue.push({(int)lampClock, {tempFd, temp}});
                 }
                 else
                 {
+                    
                     if(send(tempFd, REPLY, MAX, 0) != -1)
                     {
                         if(send(tempFd, fileName, MAX, 0) != -1)
@@ -331,11 +347,12 @@ void sockListenServer(int tempFd)
                 cout<<"\nReceived reply from server for: "<<tempFd<<" "<<fileNo<<endl;
                 Reply[{tempFd, fileNo}] = true;
             }            
-        }
-        else
-        {
-            cout<<"\nConnection falied."<<endl;
-            exit(0);
+            else
+            {
+                terminate();
+                cout<<"\nConnection falied."<<endl;
+                exit(0);
+            }
         }
         delete request;
         delete timeStamp;
@@ -464,6 +481,11 @@ int main(int argc, char** argv)
     for(int i=0; i<5; i++)
         clientThread[i] = thread(sockListen, serverSocket);
     
+    serverThread1.join();
+    exit(0);
+    serverThread2.join();
+    exit(0);
+
     for(int i=0; i<5; i++)
         clientThread[i].join();
 
